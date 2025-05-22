@@ -1,0 +1,17 @@
+PyPDF2
+llama-cpp-python --extra-index-url https://jllllll.github.io/llama-cpp-python-cuBLAS-wheels
+llama-cpp-python
+# Embedding model
+sentence-transformers
+
+# Vector store
+chromadb==0.4.13
+
+
+# Optional (for speed/performance)
+torch
+
+pydantic==1.10.13
+onnxruntime==1.17.1
+
+

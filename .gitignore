@@ -1,0 +1,50 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtualenv
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+*.env
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints
+
+# Log & tmp
+*.log
+*.tmp
+
+# Models / Checkpoints / Large files
+*.gguf
+*.ckpt
+*.pt
+*.pth
+*.bin
+*.onnx
+*.tflite
+*.pb
+*.npz
+*.h5
+
+*.pdf
+
+# Chroma / DB related (optional)
+chroma.db/
+*.sqlite
+*.db
+
+# Output folder
+outputs/
+results/
