@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <title>Helpdesk (RAG) — WhatsApp style</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: Inter, system-ui, Arial; background:#ece5dd; margin:0; display:flex; justify-content:center; align-items:center; height:100vh;}
+    .app { width:420px; height:680px; border-radius:12px; overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,0.15); background:#fff; display:flex; flex-direction:column;}
+    .header { background:#075e54; color:#fff; padding:14px 16px; font-weight:600; display:flex; gap:12px; align-items:center;}
+    .header .dot { width:40px; height:40px; border-radius:50%; background:#00a884; display:flex; align-items:center; justify-content:center; font-weight:bold; }
+    .messages { flex:1; padding:16px; overflow:auto; background-image: linear-gradient(45deg, rgba(0,0,0,0.02) 25%, transparent 25%, transparent 50%, rgba(0,0,0,0.02) 50%, rgba(0,0,0,0.02) 75%, transparent 75%, transparent); background-size:20px 20px; }
+    .bubble { max-width:78%; padding:10px 12px; border-radius:12px; margin:8px 0; display:inline-block; line-height:1.35; white-space:pre-wrap; }
+    .user { background:#dcf8c6; align-self:flex-end; margin-left:auto; border-bottom-right-radius:4px; }
+    .bot { background:#fff; border:1px solid #e6e6e6; align-self:flex-start; margin-right:auto; border-bottom-left-radius:4px; }
+    .meta { font-size:12px; color:#666; margin-top:6px; }
+    .inputbar { padding:12px; display:flex; gap:8px; border-top:1px solid #eee; background:#fafafa; }
+    .inputbar input { flex:1; padding:10px 12px; border-radius:20px; border:1px solid #ddd; outline:none; }
+    .inputbar button { background:#25d366; border:none; color:#fff; padding:10px 14px; border-radius:20px; cursor:pointer; }
+    .small { font-size:12px; color:#999; margin-left:8px;}
+    .retrieved { font-size:12px; color:#0a6; margin-top:6px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <div class="dot">H</div>
+      <div>
+        Helpdesk
+        <div style="font-size:12px; opacity:0.9">Online</div>
+      </div>
+    </div>
+
+    <div class="messages" id="messages">
+      <div class="bubble bot">Halo! Ada yang bisa dibantu? 😊</div>
+    </div>
+
+    <div class="inputbar">
+      <input id="inp" placeholder="Tulis pertanyaan..." />
+      <button id="send">Kirim</button>
+    </div>
+  </div>
+
+  <script>
+    const sendBtn = document.getElementById("send");
+    const input = document.getElementById("inp");
+    const messages = document.getElementById("messages");
+
+    function addBubble(text, cls) {
+      const el = document.createElement("div");
+      el.className = "bubble " + cls;
+      el.textContent = text;
+      messages.appendChild(el);
+      messages.scrollTop = messages.scrollHeight;
+      return el;
+    }
+
+    sendBtn.addEventListener("click", async () => {
+      const q = input.value.trim();
+      if (!q) return;
+      addBubble(q, "user");
+      input.value = "";
+      // typing indicator
+      const typing = addBubble("...", "bot");
+
+      try {
+        const res = await fetch("/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: q })
+        });
+        const data = await res.json();
+        typing.remove();
+
+        // show retrieved context summary (if any)
+        if (data.retrieved && data.retrieved.length) {
+          const top = data.retrieved[0];
+          const info = document.createElement("div");
+          info.className = "meta";
+          info.textContent = `Sumber KB: "${top.question}" (score=${(top.score||0).toFixed(3)})`;
+          messages.appendChild(info);
+        }
+
+        addBubble(data.answer, "bot");
+      } catch (e) {
+        typing.remove();
+        addBubble("⚠️ Gagal konek ke server", "bot");
+        console.error(e);
+      }
+    });
+
+    input.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") sendBtn.click();
+    });
+  </script>
+</body>
+</html>

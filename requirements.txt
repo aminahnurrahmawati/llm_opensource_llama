@@ -14,4 +14,14 @@ torch
 pydantic==1.10.13
 onnxruntime==1.17.1
 
+faiss-cpu
+RapidFuzz
+python-multipart
+
+fastapi
+uvicorn[standard]
+sentence-transformers
+faiss-cpu # or faiss-gpu if you have a compatible GPU
+numpy
+
 
