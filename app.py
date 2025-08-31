@@ -3,11 +3,12 @@ import json
 import os
 from typing import List, Dict, Any
 import numpy as np
-
+import re
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 import uvicorn
+from typing import Dict, Any, Union
 
 # embeddings + faiss
 from sentence_transformers import SentenceTransformer
@@ -91,24 +92,77 @@ def retrieve_topk(question: str, k: int = TOP_K) -> List[Dict[str, Any]]:
         })
     return results
 
+# ----------------------------
+# Function calling sederhana
+# ----------------------------
+def hitung_tambah(a: int, b: int) -> int:
+    return a + b
+
+# def detect_function_call(question: str) -> Dict[str, Any] | None: #python version >= 3.10
+def detect_function_call(question: str) -> Union[Dict[str, Any], None]:
+    """
+    Pakai LLM untuk mendeteksi apakah user minta fungsi.
+    Kalau iya → LLM balikin JSON dengan 'function_name' dan 'arguments'.
+    Kalau tidak → return None.
+    """
+    tool_prompt = f"""
+    [INST] Kamu adalah AI assistant. 
+    Jika pertanyaan user adalah permintaan perhitungan (misalnya tambah angka), 
+    jawab hanya dalam format JSON:
+    {{
+      "function_name": "...",
+      "arguments": {{ "a": int, "b": int }}
+    }}
+
+    Jika bukan perhitungan, jawab "NONE".
+
+    Pertanyaan user: "{question}" [/INST]
+    """
+    out = llm(tool_prompt, max_tokens=128, temperature=0.0)
+    text = out.get("choices", [{}])[0].get("text", "").strip()
+
+    # parsing hasil
+    if text == "NONE":
+        return None
+
+    try:
+        func_call = json.loads(text)
+        if func_call["function_name"] == "hitung_tambah":
+            a = int(func_call["arguments"]["a"])
+            b = int(func_call["arguments"]["b"])
+            result = hitung_tambah(a, b)
+            return {
+                "answer": f"Hasil penjumlahan {a} + {b} adalah {result}.",
+                "source": "function:hitung_tambah",
+                "retrieved": []
+            }
+    except Exception as e:
+        print("Parsing error:", e, "raw:", text)
+        return None
+    
+
 def ask_pipeline(question: str, top_k: int = TOP_K, sim_threshold: float = SIM_THRESHOLD) -> Dict[str, Any]:
     """
-    Retrieval-augmented pipeline:
-    - retrieve top_k
-    - if top result similarity >= sim_threshold, include retrieved answers as context
-    - call LLM with contexts and return answer + metadata
+    Pipeline:
+    1. Deteksi function calling → kalau match, langsung return hasil fungsi
+    2. Kalau tidak, lanjut retrieval + LLM
     """
+    # Step 1: function calling
+    func_result = detect_function_call(question)
+    if func_result:
+        return {
+            "answer": func_result["answer"],
+            "source": "function_call",
+            "retrieved": []  # kosongin supaya frontend nggak bikin "Sumber KB"
+        }
+
+    # Step 2: retrieval seperti biasa
     retrieved = retrieve_topk(question, k=top_k)
     contexts = []
-    used_from_kb = False
     if retrieved:
-        # Collect contexts whose score >= small floor (we'll send top_k anyway)
         contexts = [r["answer"] for r in retrieved]
-        if retrieved[0]["score"] >= sim_threshold:
-            used_from_kb = True
 
     prompt = build_prompt(question, contexts)
-    # You can tune max_tokens / temperature as needed
     out = llm(prompt, max_tokens=256, temperature=0.0)
     text = out.get("choices", [{}])[0].get("text", "").strip()
 
@@ -117,6 +171,35 @@ def ask_pipeline(question: str, top_k: int = TOP_K, sim_threshold: float = SIM_T
         "source": "kb+llm" if contexts else "llm",
         "retrieved": retrieved,
     }
+
+
+
+# def ask_pipeline(question: str, top_k: int = TOP_K, sim_threshold: float = SIM_THRESHOLD) -> Dict[str, Any]:
+#     """
+#     Retrieval-augmented pipeline:
+#     - retrieve top_k
+#     - if top result similarity >= sim_threshold, include retrieved answers as context
+#     - call LLM with contexts and return answer + metadata
+#     """
+#     retrieved = retrieve_topk(question, k=top_k)
+#     contexts = []
+#     used_from_kb = False
+#     if retrieved:
+#         # Collect contexts whose score >= small floor (we'll send top_k anyway)
+#         contexts = [r["answer"] for r in retrieved]
+#         if retrieved[0]["score"] >= sim_threshold:
+#             used_from_kb = True
+
+#     prompt = build_prompt(question, contexts)
+#     # You can tune max_tokens / temperature as needed
+#     out = llm(prompt, max_tokens=256, temperature=0.0)
+#     text = out.get("choices", [{}])[0].get("text", "").strip()
+
+#     return {
+#         "answer": text,
+#         "source": "kb+llm" if contexts else "llm",
+#         "retrieved": retrieved,
+#     }
 
 # ----------------------------
 # FastAPI app + template
